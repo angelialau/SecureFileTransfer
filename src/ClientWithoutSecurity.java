@@ -25,11 +25,15 @@ public class ClientWithoutSecurity {
 		try {
 
 			System.out.println("Establishing connection to server...");
-
+			String hostName = "127.0.0.1";
 			// Connect to server and get the input and output streams
-			clientSocket = new Socket("localhost", 4321);
+			clientSocket = new Socket(hostName, 4321);
 			toServer = new DataOutputStream(clientSocket.getOutputStream());
 			fromServer = new DataInputStream(clientSocket.getInputStream());
+
+			// do the security stuffz here
+
+
 
 			System.out.println("Sending file...");
 
