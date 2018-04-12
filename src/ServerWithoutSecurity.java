@@ -1,32 +1,63 @@
+import javax.crypto.Cipher;
 import java.io.BufferedOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.FileOutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.security.KeyFactory;
+import java.security.PrivateKey;
+import java.security.spec.PKCS8EncodedKeySpec;
 
 public class ServerWithoutSecurity {
 
 	public static void main(String[] args) {
 
-		ServerSocket welcomeSocket = null;
-		Socket connectionSocket = null;
+		ServerSocket serverSocket = null;
+		Socket clientSocket = null;
 		DataOutputStream toClient = null;
 		DataInputStream fromClient = null;
 
 		FileOutputStream fileOutputStream = null;
 		BufferedOutputStream bufferedFileOutputStream = null;
+		String plaintext = "Hello I am Bob.";
 
 		try {
-			welcomeSocket = new ServerSocket(4321);
-			connectionSocket = welcomeSocket.accept();
-			fromClient = new DataInputStream(connectionSocket.getInputStream());
-			toClient = new DataOutputStream(connectionSocket.getOutputStream());
+			int portNum = 4321; //socket address
+			serverSocket = new ServerSocket(portNum);
+			System.out.println("Waiting for clients.");
+			clientSocket = serverSocket.accept();
+			System.out.println("Client connection is established.");
 
-			while (!connectionSocket.isClosed()) {
+			fromClient = new DataInputStream(clientSocket.getInputStream());
+			toClient = new DataOutputStream(clientSocket.getOutputStream());
+
+			while (!clientSocket.isClosed()) {
                 // get server's public key from CA's public key
 
+				String privateServerPath = "/Users/thamyeeting/Documents/SecureFileTransfer/privateServer.der";
+				Path path = Paths.get(privateServerPath);
 
+				byte[] privateKeyByte = Files.readAllBytes(path);
+
+				PKCS8EncodedKeySpec keySpec = new PKCS8EncodedKeySpec(privateKeyByte);
+				KeyFactory keyFactory = KeyFactory.getInstance("RSA");
+				PrivateKey myPrivateKey = keyFactory.generatePrivate(keySpec);
+
+				// Encryption cipher
+				Cipher RSAEnCipherPrivate = Cipher.getInstance("RSA/ECB/PKCS1Padding");
+				RSAEnCipherPrivate.init(Cipher.ENCRYPT_MODE, myPrivateKey);
+				byte[] encryptedBytes = RSAEnCipherPrivate.doFinal(plaintext.getBytes());
+
+				toClient.writeInt(encryptedBytes.length);
+				toClient.write(encryptedBytes);
+
+				/*
+				Cipher RSADeCipherPrivate = Cipher.getInstance("RSA/ESC/PKCS1Padding");
+				RSADeCipherPrivate.init(Cipher.DECRYPT_MODE, myPrivateKey);
 
 				int packetType = fromClient.readInt();
 
@@ -60,8 +91,8 @@ public class ServerWithoutSecurity {
 					if (bufferedFileOutputStream != null) fileOutputStream.close();
 					fromClient.close();
 					toClient.close();
-					connectionSocket.close();
-				}
+					clientSocket.close();
+				}*/
 
 			}
 		} catch (Exception e) {e.printStackTrace();}
