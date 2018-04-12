@@ -11,6 +11,8 @@ import java.nio.file.Paths;
 import java.security.KeyFactory;
 import java.security.PrivateKey;
 import java.security.spec.PKCS8EncodedKeySpec;
+import java.util.Random;
+import java.util.concurrent.TimeUnit;
 
 public class ServerWithoutSecurity {
 
@@ -35,10 +37,20 @@ public class ServerWithoutSecurity {
 			fromClient = new DataInputStream(clientSocket.getInputStream());
 			toClient = new DataOutputStream(clientSocket.getOutputStream());
 
-			while (!clientSocket.isClosed()) {
+			if (!clientSocket.isClosed()) {
                 // get server's public key from CA's public key
 
-				String privateServerPath = "/Users/thamyeeting/Documents/SecureFileTransfer/privateServer.der";
+                int lengthOfRandomBytes = fromClient.read();
+                System.out.println("Byte length: " + lengthOfRandomBytes);
+                byte[] clientMessage = new byte[lengthOfRandomBytes];
+                int RandomBytes = fromClient.read(clientMessage);
+                System.out.println(new String(clientMessage));
+
+                if (RandomBytes != lengthOfRandomBytes){
+                    TimeUnit.SECONDS.sleep(1);
+                }
+
+				String privateServerPath = "/Users/thamyeeting/Documents/SecureFileTransfer/serverPrivateKey.der";
 				Path path = Paths.get(privateServerPath);
 
 				byte[] privateKeyByte = Files.readAllBytes(path);
@@ -50,7 +62,8 @@ public class ServerWithoutSecurity {
 				// Encryption cipher
 				Cipher RSAEnCipherPrivate = Cipher.getInstance("RSA/ECB/PKCS1Padding");
 				RSAEnCipherPrivate.init(Cipher.ENCRYPT_MODE, myPrivateKey);
-				byte[] encryptedBytes = RSAEnCipherPrivate.doFinal(plaintext.getBytes());
+				byte[] encryptedBytes = RSAEnCipherPrivate.doFinal(clientMessage);
+                System.out.println("Encrypted Bytes: " + encryptedBytes);
 
 				toClient.writeInt(encryptedBytes.length);
 				toClient.write(encryptedBytes);
