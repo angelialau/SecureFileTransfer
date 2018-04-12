@@ -24,6 +24,9 @@ public class ServerWithoutSecurity {
 			toClient = new DataOutputStream(connectionSocket.getOutputStream());
 
 			while (!connectionSocket.isClosed()) {
+                // get server's public key from CA's public key
+
+
 
 				int packetType = fromClient.readInt();
 

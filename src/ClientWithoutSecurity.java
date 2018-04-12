@@ -1,8 +1,8 @@
-import java.io.BufferedInputStream;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.FileInputStream;
+import java.io.*;
 import java.net.Socket;
+import java.security.PublicKey;
+import java.security.cert.CertificateFactory;
+import java.security.cert.X509Certificate;
 
 public class ClientWithoutSecurity {
 
@@ -25,13 +25,19 @@ public class ClientWithoutSecurity {
 		try {
 
 			System.out.println("Establishing connection to server...");
-			String hostName = "127.0.0.1";
+			String hostName = "10.12.16.24";
 			// Connect to server and get the input and output streams
 			clientSocket = new Socket(hostName, 4321);
 			toServer = new DataOutputStream(clientSocket.getOutputStream());
 			fromServer = new DataInputStream(clientSocket.getInputStream());
 
 			// do the security stuffz here
+            InputStream fis = new FileInputStream("CA.crt");
+            CertificateFactory cf = CertificateFactory.getInstance("X.509");
+            X509Certificate CAcert =(X509Certificate)cf.generateCertificate(fis);
+            PublicKey caCertPublicKey = CAcert.getPublicKey();  //CA's public key
+            CAcert.checkValidity();
+
 
 
 
