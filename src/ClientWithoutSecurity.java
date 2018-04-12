@@ -39,11 +39,11 @@ public class ClientWithoutSecurity {
 
             Random random = new Random();
             theStringToCheck = String.valueOf(random.nextInt());
-            System.out.println("Sending server a nounce: "+ theStringToCheck);
-            toServer.write(theStringToCheck.getBytes().length); //
-            toServer.write(theStringToCheck.getBytes());
+            System.out.println("I'm sending server a nonce...");
+            toServer.write(theStringToCheck.getBytes().length); // send num of bytes
+            toServer.write(theStringToCheck.getBytes()); // send nonce
 
-			// do the security stuffz here
+			// verifying bob's signed certificate
             InputStream fis = new FileInputStream("CA.crt");
             InputStream ServerCertInput = new FileInputStream("ServerCert.crt");
             CertificateFactory cf = CertificateFactory.getInstance("X.509");
@@ -53,16 +53,16 @@ public class ClientWithoutSecurity {
             PublicKey serverPublicKey = ServerCert.getPublicKey();  //CA's public key
             CAcert.checkValidity();
             ServerCert.verify(CAKey);
+            System.out.println("I have the server's public key now...");
 
             // receive authentication message and decrypt
 
             int lengthOfBytes = fromServer.readInt();
-            System.out.println("Byte length: " + lengthOfBytes);
             byte[] encryptedServerMessage = new byte[lengthOfBytes];
             int readBytes = fromServer.read( encryptedServerMessage );
 
             if(readBytes != lengthOfBytes){
-                TimeUnit.SECONDS.sleep(1);
+                TimeUnit.SECONDS.sleep(1); // waits for server to finish writing the bytes
             }
 
             // decrypt server message with server's public key
@@ -71,8 +71,12 @@ public class ClientWithoutSecurity {
             byte[] decryptedServerMessage = dcipher.doFinal(encryptedServerMessage);
             String serverMessage = new String(decryptedServerMessage);
 
-            if(serverMessage.equals("Hello I am Bob.")){
+            System.out.println("Original nonce: " + theStringToCheck);
+            System.out.println("Server's version: " + serverMessage);
+            if(serverMessage.equals(theStringToCheck)){
                 System.out.println("Verification success: Server is who he says he is.");
+            }else{
+                System.out.println("Man in the middle attack!!!! Trudy alert!!!!");
             }
 
 
