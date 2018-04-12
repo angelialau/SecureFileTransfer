@@ -1,5 +1,8 @@
+import javax.crypto.Cipher;
+import javax.xml.bind.DatatypeConverter;
 import java.io.*;
 import java.net.Socket;
+import java.nio.ByteBuffer;
 import java.security.PublicKey;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
@@ -33,12 +36,33 @@ public class ClientWithoutSecurity {
 
 			// do the security stuffz here
             InputStream fis = new FileInputStream("CA.crt");
+            InputStream ServerCertInput = new FileInputStream("ServerCert.crt");
             CertificateFactory cf = CertificateFactory.getInstance("X.509");
             X509Certificate CAcert =(X509Certificate)cf.generateCertificate(fis);
-            PublicKey caPublicKey = CAcert.getPublicKey();  //CA's public key
+            X509Certificate ServerCert =(X509Certificate)cf.generateCertificate(ServerCertInput);
+            PublicKey CAKey = CAcert.getPublicKey();  //CA's public key
+            PublicKey serverPublicKey = ServerCert.getPublicKey();  //CA's public key
             CAcert.checkValidity();
+            ServerCert.verify(CAKey);
 
-            // get bob's public key
+            // receive authentication message and decrypt
+            Cipher dcipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");
+            dcipher.init(Cipher.DECRYPT_MODE, serverPublicKey);
+            int lengthOfBytes = fromServer.readInt();
+            byte[] encryptedServerMessage = new byte[lengthOfBytes];
+            int readBytes = fromServer.read( encryptedServerMessage );
+
+            while(true){ // server still sending
+                if(readBytes == lengthOfBytes){
+                    break;
+                }
+            }
+
+            // decrypt server message with server's public key
+            byte[] decryptedServerMessage = dcipher.doFinal(encryptedServerMessage);
+            String serverMessage = DatatypeConverter.printBase64Binary(decryptedServerMessage);
+
+            System.out.println("Server said: " + serverMessage);
 
 
 
