@@ -35,9 +35,10 @@ public class ClientWithoutSecurity {
             InputStream fis = new FileInputStream("CA.crt");
             CertificateFactory cf = CertificateFactory.getInstance("X.509");
             X509Certificate CAcert =(X509Certificate)cf.generateCertificate(fis);
-            PublicKey caCertPublicKey = CAcert.getPublicKey();  //CA's public key
+            PublicKey caPublicKey = CAcert.getPublicKey();  //CA's public key
             CAcert.checkValidity();
 
+            // get bob's public key
 
 
 
