@@ -6,12 +6,16 @@ import java.nio.ByteBuffer;
 import java.security.PublicKey;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
+import java.util.Random;
+import java.util.concurrent.TimeUnit;
 
 public class ClientWithoutSecurity {
+    private static String theStringToCheck = "";
 
 	public static void main(String[] args) {
 
     	String filename = "rr.txt";
+
 
 		int numBytes = 0;
 
@@ -26,13 +30,18 @@ public class ClientWithoutSecurity {
 		long timeStarted = System.nanoTime();
 
 		try {
-
 			System.out.println("Establishing connection to server...");
 			String hostName = "10.12.16.24";
 			// Connect to server and get the input and output streams
 			clientSocket = new Socket(hostName, 4321);
 			toServer = new DataOutputStream(clientSocket.getOutputStream());
 			fromServer = new DataInputStream(clientSocket.getInputStream());
+
+            Random random = new Random();
+            theStringToCheck = String.valueOf(random.nextInt());
+            System.out.println("Sending server a nounce: "+ theStringToCheck);
+            toServer.write(theStringToCheck.getBytes().length); //
+            toServer.write(theStringToCheck.getBytes());
 
 			// do the security stuffz here
             InputStream fis = new FileInputStream("CA.crt");
@@ -46,24 +55,25 @@ public class ClientWithoutSecurity {
             ServerCert.verify(CAKey);
 
             // receive authentication message and decrypt
-            Cipher dcipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");
-            dcipher.init(Cipher.DECRYPT_MODE, serverPublicKey);
+
             int lengthOfBytes = fromServer.readInt();
+            System.out.println("Byte length: " + lengthOfBytes);
             byte[] encryptedServerMessage = new byte[lengthOfBytes];
             int readBytes = fromServer.read( encryptedServerMessage );
 
-            while(true){ // server still sending
-                if(readBytes == lengthOfBytes){
-                    break;
-                }
+            if(readBytes != lengthOfBytes){
+                TimeUnit.SECONDS.sleep(1);
             }
 
             // decrypt server message with server's public key
+            Cipher dcipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");
+            dcipher.init(Cipher.DECRYPT_MODE, serverPublicKey);
             byte[] decryptedServerMessage = dcipher.doFinal(encryptedServerMessage);
-            String serverMessage = DatatypeConverter.printBase64Binary(decryptedServerMessage);
+            String serverMessage = new String(decryptedServerMessage);
 
-            System.out.println("Server said: " + serverMessage);
-
+            if(serverMessage.equals("Hello I am Bob.")){
+                System.out.println("Verification success: Server is who he says he is.");
+            }
 
 
 			System.out.println("Sending file...");
@@ -104,4 +114,5 @@ public class ClientWithoutSecurity {
 		long timeTaken = System.nanoTime() - timeStarted;
 		System.out.println("Program took: " + timeTaken/1000000.0 + "ms to run");
 	}
+
 }
