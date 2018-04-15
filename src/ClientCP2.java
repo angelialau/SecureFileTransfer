@@ -1,21 +1,15 @@
 import javax.crypto.Cipher;
-import javax.xml.bind.DatatypeConverter;
+import javax.crypto.KeyGenerator;
+import javax.crypto.SecretKey;
 import java.io.*;
 import java.net.Socket;
-import java.nio.ByteBuffer;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.security.KeyFactory;
-import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
-import java.security.spec.PKCS8EncodedKeySpec;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
 
-public class ClientCP1 {
+public class ClientCP2 {
     private static String theStringToCheck = "";
 
 	public static void main(String[] args) {
@@ -37,20 +31,24 @@ public class ClientCP1 {
 		try {
 			System.out.println("Establishing connection to server...");
 			String hostName = "10.12.16.24";
+
 			// Connect to server and get the input and output streams
 			clientSocket = new Socket(hostName, 4321);
 			toServer = new DataOutputStream(clientSocket.getOutputStream());
 			fromServer = new DataInputStream(clientSocket.getInputStream());
 
+            // generating a nonce
             Random random = new Random();
             theStringToCheck = String.valueOf(random.nextInt());
+
+            // sending the nonce
             System.out.println("I'm sending server a nonce...");
             toServer.writeInt(2); // packet type for nonce
             toServer.writeInt(theStringToCheck.getBytes().length); // send num of bytes in nonce
             toServer.write(theStringToCheck.getBytes()); // send nonce itself
             toServer.flush();
 
-            // verifying bob's signed certificate
+			// initialising certs and keys
             CertificateFactory cf = CertificateFactory.getInstance("X.509");
             InputStream fis = new FileInputStream("CA.crt");
             X509Certificate CAcert =(X509Certificate)cf.generateCertificate(fis);
@@ -60,23 +58,25 @@ public class ClientCP1 {
             X509Certificate ServerCert =(X509Certificate)cf.generateCertificate(ServerCertInput);
             PublicKey serverPublicKey = ServerCert.getPublicKey();  //server's public key
 
+            // decipher
+            Cipher dcipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");
+            dcipher.init(Cipher.DECRYPT_MODE, serverPublicKey);
+
+            // cipher
+            Cipher cipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");
+            cipher.init(Cipher.ENCRYPT_MODE, serverPublicKey); // using the server's public key to encrypt the file
+
+            // verifying bob's signed certificate
             CAcert.checkValidity();
             ServerCert.verify(CAKey);
             System.out.println("I have the server's public key now...");
 
-            // receive authentication message and decrypt
-
+            // receive bob's encrypted version of nonce
             int lengthOfBytes = fromServer.readInt();
             byte[] encryptedServerMessage = new byte[lengthOfBytes];
-            int readBytes = fromServer.read( encryptedServerMessage );
+            fromServer.readFully(encryptedServerMessage, 0, lengthOfBytes);
 
-            if(readBytes != lengthOfBytes){
-                TimeUnit.SECONDS.sleep(1); // waits for server to finish writing the bytes
-            }
-
-            // decrypt server message with server's public key
-            Cipher dcipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");
-            dcipher.init(Cipher.DECRYPT_MODE, serverPublicKey);
+            // decrypt bob's nonce with his public key
             byte[] decryptedServerMessage = dcipher.doFinal(encryptedServerMessage);
             String serverMessage = new String(decryptedServerMessage);
 
@@ -85,16 +85,33 @@ public class ClientCP1 {
             if(serverMessage.equals(theStringToCheck)){
                 System.out.println("Verification success: Server is who he says he is.");
             }else{
-                System.out.println("Man in the middle attack!!!! Trudy alert!!!!");
+                System.out.println("Verification failure: Man in the middle attack!!!! Trudy alert!!!!");
 				System.out.println("Terminating...");
 				return;
             }
 
-            System.out.println("Sending file...");
+            // generating session key
+            System.out.println("Sending shared key...");
+            KeyGenerator keyGen = KeyGenerator.getInstance("AES");
+            SecretKey sharedKey = keyGen.generateKey();
 
-            Cipher cipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");
-            cipher.init(Cipher.ENCRYPT_MODE, serverPublicKey); // using the server's public key to encrypt the file
-            byte[] encryptedFileName = cipher.doFinal(filename.getBytes());
+            // sending shared session key
+            byte[] encryptedKey = cipher.doFinal(sharedKey.getEncoded());
+            toServer.writeInt(3); // packet type = filename
+            toServer.writeInt(encryptedKey.length);
+            toServer.write(encryptedKey);
+            toServer.flush();
+
+            System.out.println("shared key is: " + sharedKey.toString());
+
+            // cipher for shared session key
+            Cipher fasterCipher = Cipher.getInstance("AES/ECB/PKCS5Padding");
+            fasterCipher.init(Cipher.ENCRYPT_MODE, sharedKey);
+
+            // encrypting filename
+            byte[] encryptedFileName = fasterCipher.doFinal(filename.getBytes());
+
+            System.out.println("Sending file...");
 
             // Send the filename
             toServer.writeInt(0); // packet type = filename
@@ -113,14 +130,14 @@ public class ClientCP1 {
                 numBytes = bufferedFileInputStream.read(fromFileBuffer);
                 fileEnded = numBytes < 117;
 
-                byte[] encryptedBuffer = cipher.doFinal(fromFileBuffer); // we encrypt the block before sending it
+                byte[] encryptedBuffer = fasterCipher.doFinal(fromFileBuffer); // we encrypt the block before sending it
                 toServer.writeInt(1); // packet type = file
                 toServer.writeInt(numBytes);
                 toServer.write(encryptedBuffer);
                 toServer.flush();
 
             }
-            System.out.println("Panggang lo thx");
+            System.out.println("Panggang lo 2.0 thx");
             bufferedFileInputStream.close();
             fileInputStream.close();
 
