@@ -46,8 +46,7 @@ public class ServerCP1 {
 			toClient = new DataOutputStream(clientSocket.getOutputStream());
 
             // initialising keys
-			String privateServerPath = "/Users/thamyeeting/Documents/SecureFileTransfer/serverPrivateKey.der";
-            Path path = Paths.get(privateServerPath);
+			Path path = Paths.get("serverPrivateKey.der");
 
             byte[] privateKeyByte = Files.readAllBytes(path);
             PKCS8EncodedKeySpec privateSpec = new PKCS8EncodedKeySpec(privateKeyByte);
