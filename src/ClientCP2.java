@@ -14,7 +14,8 @@ public class ClientCP2 {
 
 	public static void main(String[] args) {
 
-    	String filename = "rr.txt";
+    	String filename = "rrlong.txt";
+        int sum = 0;
 
 		int numBytes = 0;
 
@@ -129,6 +130,7 @@ public class ClientCP2 {
             for (boolean fileEnded = false; !fileEnded;) {
                 numBytes = bufferedFileInputStream.read(fromFileBuffer);
                 fileEnded = numBytes < 117;
+                sum += numBytes;
 
                 byte[] encryptedBuffer = fasterCipher.doFinal(fromFileBuffer); // we encrypt the block before sending it
                 toServer.writeInt(1); // packet type = file
@@ -147,6 +149,7 @@ public class ClientCP2 {
 
 		long timeTaken = System.nanoTime() - timeStarted;
 		System.out.println("Program took: " + timeTaken/1000000.0 + "ms to run");
+        System.out.println("Total number of bytes: " + sum);
 	}
 
 }
