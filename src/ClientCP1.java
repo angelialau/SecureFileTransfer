@@ -3,19 +3,24 @@ import javax.xml.bind.DatatypeConverter;
 import java.io.*;
 import java.net.Socket;
 import java.nio.ByteBuffer;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.security.KeyFactory;
+import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
+import java.security.spec.PKCS8EncodedKeySpec;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
 
-public class ClientWithoutSecurity {
+public class ClientCP1 {
     private static String theStringToCheck = "";
 
 	public static void main(String[] args) {
 
     	String filename = "rr.txt";
-
 
 		int numBytes = 0;
 
@@ -40,8 +45,10 @@ public class ClientWithoutSecurity {
             Random random = new Random();
             theStringToCheck = String.valueOf(random.nextInt());
             System.out.println("I'm sending server a nonce...");
-            toServer.write(theStringToCheck.getBytes().length); // send num of bytes
-            toServer.write(theStringToCheck.getBytes()); // send nonce
+            toServer.writeInt(2); // packet type for nonce
+            toServer.writeInt(theStringToCheck.getBytes().length); // send num of bytes in nonce
+            toServer.write(theStringToCheck.getBytes()); // send nonce itself
+            toServer.flush();
 
 			// verifying bob's signed certificate
             InputStream fis = new FileInputStream("CA.crt");
@@ -77,41 +84,45 @@ public class ClientWithoutSecurity {
                 System.out.println("Verification success: Server is who he says he is.");
             }else{
                 System.out.println("Man in the middle attack!!!! Trudy alert!!!!");
+				System.out.println("Terminating...");
+				return;
             }
 
+            System.out.println("Sending file...");
 
-			System.out.println("Sending file...");
+            Cipher cipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");
+            cipher.init(Cipher.ENCRYPT_MODE, serverPublicKey); // using the server's public key to encrypt the file
+            byte[] encryptedFileName = cipher.doFinal(filename.getBytes());
 
-			// Send the filename
-			toServer.writeInt(0);
-			toServer.writeInt(filename.getBytes().length);
-			toServer.write(filename.getBytes());
-			toServer.flush();
+            // Send the filename
+            toServer.writeInt(0); // packet type = filename
+            toServer.writeInt(encryptedFileName.length);
+            toServer.write(encryptedFileName);
+            toServer.flush();
 
-			// Open the file
-			fileInputStream = new FileInputStream(filename);
-			bufferedFileInputStream = new BufferedInputStream(fileInputStream);
+            // Open the file
+            fileInputStream = new FileInputStream(filename);
+            bufferedFileInputStream = new BufferedInputStream(fileInputStream);
 
-	        byte [] fromFileBuffer = new byte[117];
+            byte [] fromFileBuffer = new byte[117];
 
-	        // Send the file
-	        for (boolean fileEnded = false; !fileEnded;) {
-				numBytes = bufferedFileInputStream.read(fromFileBuffer);
-				fileEnded = numBytes < fromFileBuffer.length;
+            // Send the file
+            for (boolean fileEnded = false; !fileEnded;) {
+                numBytes = bufferedFileInputStream.read(fromFileBuffer);
+                fileEnded = numBytes < 117;
 
-				toServer.writeInt(1);
-				toServer.writeInt(numBytes);
-				toServer.write(fromFileBuffer);
-				toServer.flush();
-			}
+                byte[] encryptedBuffer = cipher.doFinal(fromFileBuffer); // we encrypt the block before sending it
+                toServer.writeInt(1); // packet type = file
+                toServer.writeInt(numBytes);
+                toServer.write(encryptedBuffer);
+                toServer.flush();
 
-	        bufferedFileInputStream.close();
-	        fileInputStream.close();
-
+            }
+            System.out.println("Panggang lo thx");
+            bufferedFileInputStream.close();
+            fileInputStream.close();
 
 			System.out.println("Closing connection...");
-	        toServer.writeInt(2);
-	        toServer.flush();
 
 		} catch (Exception e) {e.printStackTrace();}
 
