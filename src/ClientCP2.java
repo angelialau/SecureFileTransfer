@@ -6,6 +6,8 @@ import java.net.Socket;
 import java.security.PublicKey;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
 
@@ -15,71 +17,120 @@ public class ClientCP2 {
 	public static void main(String[] args) {
 
     	String filename = "rrlong.txt";
+        String serverCertName = "theCert.crt";
         int sum = 0;
 
-		int numBytes = 0;
+        int numBytes = 0;
 
-		Socket clientSocket = null;
+        Socket clientSocket = null;
 
         DataOutputStream toServer = null;
         DataInputStream fromServer = null;
 
-    	FileInputStream fileInputStream = null;
+        FileInputStream fileInputStream = null;
         BufferedInputStream bufferedFileInputStream = null;
 
-		long timeStarted = System.nanoTime();
+        long timeStarted = System.nanoTime();
 
-		try {
-			System.out.println("Establishing connection to server...");
-			String hostName = "10.12.16.24";
+        try {
+            System.out.println("Establishing connection to server...");
+            String hostName = "10.12.16.24";
+            // Connect to server and get the input and output streams
+            clientSocket = new Socket(hostName, 4321);
+            toServer = new DataOutputStream(clientSocket.getOutputStream());
+            fromServer = new DataInputStream(clientSocket.getInputStream());
 
-			// Connect to server and get the input and output streams
-			clientSocket = new Socket(hostName, 4321);
-			toServer = new DataOutputStream(clientSocket.getOutputStream());
-			fromServer = new DataInputStream(clientSocket.getInputStream());
+            System.out.println("I'm asking for bob's certificate...");
+            File serverCert = new File(serverCertName); // file to store server's cert
 
-            // generating a nonce
+            if(!serverCert.exists()){
+                boolean createdFile = serverCert.createNewFile();
+                if(!createdFile){
+                    System.out.println("Failed to create new file");
+                    throw new IOException("Failed to create certificate");
+                }
+
+                FileOutputStream fileOutputStream = new FileOutputStream(serverCert);
+                BufferedOutputStream bufferedFileOutputStream = new BufferedOutputStream(fileOutputStream);
+                toServer.writeInt(4); // packet type for nonce
+
+
+                System.out.println("Bob is sending his cert...");
+                int serverNumBytes = 0;
+                for (boolean finishedSending = false; !finishedSending;) {
+                    serverNumBytes = fromServer.readInt();
+                    finishedSending = serverNumBytes < 117;
+
+                    byte[] bobBuffer = new byte[serverNumBytes];
+                    fromServer.readFully(bobBuffer, 0 , serverNumBytes);
+                    bufferedFileOutputStream.write(bobBuffer, 0, serverNumBytes);
+
+                } fromServer.skipBytes(117-serverNumBytes);
+
+                System.out.println("Received bob's cert...");
+                bufferedFileOutputStream.close();
+            }
+
             Random random = new Random();
             theStringToCheck = String.valueOf(random.nextInt());
-
-            // sending the nonce
-            System.out.println("I'm sending server a nonce...");
+            System.out.println("I'm sending bob a nonce...");
             toServer.writeInt(2); // packet type for nonce
             toServer.writeInt(theStringToCheck.getBytes().length); // send num of bytes in nonce
             toServer.write(theStringToCheck.getBytes()); // send nonce itself
             toServer.flush();
 
-			// initialising certs and keys
+            // verifying bob's signed certificate
             CertificateFactory cf = CertificateFactory.getInstance("X.509");
             InputStream fis = new FileInputStream("CA.crt");
             X509Certificate CAcert =(X509Certificate)cf.generateCertificate(fis);
             PublicKey CAKey = CAcert.getPublicKey();  //CA's public key
 
-            InputStream ServerCertInput = new FileInputStream("ServerCert.crt");
-            X509Certificate ServerCert =(X509Certificate)cf.generateCertificate(ServerCertInput);
-            PublicKey serverPublicKey = ServerCert.getPublicKey();  //server's public key
+            fis = new FileInputStream(serverCertName);
+            X509Certificate ServerCert =(X509Certificate)cf.generateCertificate(fis);
+            CAcert.checkValidity();
+            ServerCert.verify(CAKey);
 
-            // decipher
+            PublicKey serverPublicKey = ServerCert.getPublicKey();  //server's public key
+            System.out.println("I have the server's public key now...");
+
+            // receive authentication message and decrypt
             Cipher dcipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");
             dcipher.init(Cipher.DECRYPT_MODE, serverPublicKey);
 
-            // cipher
             Cipher cipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");
-            cipher.init(Cipher.ENCRYPT_MODE, serverPublicKey); // using the server's public key to encrypt the file
+            cipher.init(Cipher.ENCRYPT_MODE, serverPublicKey);
 
-            // verifying bob's signed certificate
-            CAcert.checkValidity();
-            ServerCert.verify(CAKey);
-            System.out.println("I have the server's public key now...");
+            int totalBufferLength = 0;
+            List<byte[]> totalBuffer = new ArrayList<>();
 
-            // receive bob's encrypted version of nonce
-            int lengthOfBytes = fromServer.readInt();
-            byte[] encryptedServerMessage = new byte[lengthOfBytes];
-            fromServer.readFully(encryptedServerMessage, 0, lengthOfBytes);
+            int lengthOfBytes = 0;
+            for (boolean finishedSending = false; !finishedSending;) {
+                lengthOfBytes = fromServer.readInt();
+                System.out.println("num bytes: " + lengthOfBytes);
+                finishedSending = lengthOfBytes < 117;
 
-            // decrypt bob's nonce with his public key
-            byte[] decryptedServerMessage = dcipher.doFinal(encryptedServerMessage);
-            String serverMessage = new String(decryptedServerMessage);
+                byte[] bobBuffer = new byte[lengthOfBytes];
+                fromServer.readFully(bobBuffer, 0 , lengthOfBytes);
+                //byte[] decryptedBobBuffer = dcipher.doFinal((bobBuffer)); // bad padding : decrypt error here
+                totalBuffer.add(bobBuffer);
+                totalBufferLength+= bobBuffer.length;
+
+            } fromServer.skipBytes(117-lengthOfBytes);
+
+            byte[] finalBuffer = new byte[totalBufferLength];
+            int latestIndex = 0;
+
+            for(int i=0; i< totalBuffer.size(); i++){
+                byte[] from = totalBuffer.get(i);
+                System.arraycopy(from, 0, finalBuffer, latestIndex, from.length);
+                latestIndex += from.length;
+            }
+
+            // decrypt server message with server's public key
+            byte[] deNonce = dcipher.doFinal(finalBuffer);
+
+//          byte[] decryptedServerMessage = dcipher.doFinal(finalBuffer);
+            String serverMessage = new String(deNonce);
 
             System.out.println("Original nonce: " + theStringToCheck);
             System.out.println("Server's version: " + serverMessage);
