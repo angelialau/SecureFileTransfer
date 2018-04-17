@@ -1,9 +1,6 @@
 import javax.crypto.*;
 import javax.crypto.spec.SecretKeySpec;
-import java.io.BufferedOutputStream;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.FileOutputStream;
+import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.file.Files;
@@ -21,7 +18,7 @@ import java.util.concurrent.TimeUnit;
 
 public class ServerCP2 {
 
-    private static SecretKeySpec clientAES = null;
+    private static SecretKeySpec AESkey = null;
 
     public static void main(String[] args) {
 
@@ -66,11 +63,10 @@ public class ServerCP2 {
             while (!clientSocket.isClosed()) {
                 int packetType = fromClient.readInt();
 
-
                 // If the packet is for transferring the filename
                 if (packetType == 0) {
-                    if (clientAES == null){
-                        System.out.println("Please initiate AES. kthxbye");
+                    if (AESkey == null){
+                        System.out.println("Please initiate AES.");
                         return;
                     }
 
@@ -80,7 +76,7 @@ public class ServerCP2 {
                     byte [] filename = new byte[numBytes];
                     fromClient.readFully(filename, 0, numBytes);
 
-                    RSADeCipherAES.init(Cipher.DECRYPT_MODE, clientAES);
+                    RSADeCipherAES.init(Cipher.DECRYPT_MODE, AESkey);
                     byte[] newFilename = RSADeCipherAES.doFinal(filename);
 
                     fileOutputStream = new FileOutputStream("recv/"+new String(newFilename, 0, newFilename.length));
@@ -89,8 +85,8 @@ public class ServerCP2 {
                     // If the packet is for transferring a chunk of the file
                 } else if (packetType == 1) {
 
-                    if (clientAES == null){
-                        System.out.println("Please initiate AES. kthxbye");
+                    if (AESkey == null){
+                        System.out.println("Please initiate AES. ");
                         return;
                     }
 
@@ -98,7 +94,7 @@ public class ServerCP2 {
                     byte [] block = new byte[128];
                     fromClient.readFully(block, 0, 128);
 
-                    RSADeCipherAES.init(Cipher.DECRYPT_MODE, clientAES);
+                    RSADeCipherAES.init(Cipher.DECRYPT_MODE, AESkey);
                     byte[] blockbytes = RSADeCipherAES.doFinal(block);
                     if (numBytes > 0){
                         bufferedFileOutputStream.write(blockbytes, 0, numBytes);}
@@ -121,46 +117,74 @@ public class ServerCP2 {
                     fromClient.readFully(block,0, numBytes);
 
                     byte[] encryptedBytes = RSAEnCipherPrivate.doFinal(block);
-                    System.out.println("Encrypted Bytes: " + new String(encryptedBytes));
 
-                    toClient.writeInt(encryptedBytes.length);
-                    toClient.write(encryptedBytes);
-                    toClient.flush();
+                    InputStream inputStream = new ByteArrayInputStream(encryptedBytes);
+                    BufferedInputStream bufferedInputStream = new BufferedInputStream(inputStream);
+                    byte[] blockbyte = new byte[117];
+
+                    for (boolean byteFinished = false; !byteFinished;) {
+                        int numOfBytes = bufferedInputStream.read(blockbyte);
+                        byteFinished = numOfBytes < 117;
+
+                        toClient.writeInt(numOfBytes);
+                        toClient.write(blockbyte);
+                        toClient.flush();
+                    }
                 }
 
                 else if (packetType == 3){
-                    //reading the bytes from client
-                    List<byte[]> bytelist = new ArrayList<>();
+                    //Initiating AESkey initiation
+                    List<byte[]> bytes = new ArrayList<>();
                     int numOfBytes = 0;
                     int sum = 0;
-                    do {
+                   do {
+
                         numOfBytes = fromClient.readInt();
                         byte[] block = new byte[128];
                         fromClient.readFully(block, 0, 128);
                         byte[] blockbytes = RSADeCipherPrivate.doFinal(block);
 
+
                         if (numOfBytes < 117) {
-                            byte[] truncatedBytes = new byte[numOfBytes];
-                            System.arraycopy(blockbytes, 0, truncatedBytes, 0, numOfBytes);
-                            bytelist.add(truncatedBytes);
+                            byte[] cutBytes = new byte[numOfBytes];
+                            System.arraycopy(blockbytes, 0, cutBytes, 0, numOfBytes);
+                            bytes.add(cutBytes);
+                            sum += blockbytes.length;
                             break;
                         }
-                        bytelist.add(blockbytes);
+                        bytes.add(blockbytes);
+                        sum += blockbytes.length;
                     }
                     while (numOfBytes == 117);
 
-                    for (int i = 0; i<bytelist.size(); i ++){
-                        sum += bytelist.get(i).length;
+                    byte[] bytesum = new byte[sum];
+                    int counter = 0;
+                    for (byte[] element: bytes){
+                        System.arraycopy(element, 0, bytesum, counter, element.length);
+                        counter += element.length;
                     }
-                    byte[] bytes = new byte[sum];
-                    int lastPos = 0;
-                    for (int i = 0; i <bytelist.size(); i++) {
-                        byte[] src = bytelist.get(i);
-                        System.arraycopy(src, 0, bytes, lastPos, src.length);
-                        lastPos += src.length;
+
+                    AESkey = new SecretKeySpec(bytesum, "AES");
+                    System.out.println("Initiated AES successfully.");
+                }
+
+                else if (packetType == 4){ //send certificate to client
+                    String certificate = "ServerCert.crt";
+                    System.out.println("Sending certificate " + certificate + " to client...");
+
+                    FileInputStream fileInputStream = new FileInputStream(certificate);
+                    BufferedInputStream bufferedFileInputStream = new BufferedInputStream(fileInputStream);
+
+                    byte[] fromFileblock = new byte[117];
+
+                    for (boolean fileEnded = false; !fileEnded;){
+                        int numBytes = bufferedFileInputStream.read(fromFileblock);
+                        fileEnded = numBytes<117;
+                        toClient.writeInt(numBytes);
+                        toClient.write(fromFileblock);
+                        toClient.flush();
                     }
-                    clientAES = new SecretKeySpec(bytes, "AES");
-                    System.out.println("Initiated clientAES");
+                    System.out.println("Sent certificate.");
                 }
             }
         } catch (Exception e) {e.printStackTrace();}
