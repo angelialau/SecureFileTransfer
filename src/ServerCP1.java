@@ -2,10 +2,7 @@ import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
 import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.NoSuchPaddingException;
-import java.io.BufferedOutputStream;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.FileOutputStream;
+import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.file.Files;
@@ -20,6 +17,22 @@ import java.util.Random;
 import java.util.concurrent.TimeUnit;
 
 public class ServerCP1 {
+	private static void sendBytes(DataOutputStream toClient, byte[] bytes) throws IOException {
+		InputStream is = new ByteArrayInputStream(bytes);
+		BufferedInputStream bis = new BufferedInputStream(is);
+		byte [] byteBuffer = new byte[117];
+		// Send bytes
+		for (boolean byteEnded = false; !byteEnded;) {
+			int numBytes = bis.read(byteBuffer);
+			System.out.println(numBytes);
+			byteEnded = numBytes < 117;
+
+			toClient.writeInt(numBytes);
+			toClient.write(byteBuffer);
+			toClient.flush();
+		}
+	}
+
 
 	public static void main(String[] args) {
 
@@ -62,7 +75,6 @@ public class ServerCP1 {
 			while (!clientSocket.isClosed()) {
 				int packetType = fromClient.readInt();
 
-
 				// If the packet is for transferring the filename
 				if (packetType == 0) {
 					System.out.println("Receiving file...");
@@ -74,7 +86,7 @@ public class ServerCP1 {
 
 					byte[] newFilename = RSADeCipherPrivate.doFinal(filename);
 
-					fileOutputStream = new FileOutputStream("recv/"+new String(newFilename, 0, newFilename.length));
+					fileOutputStream = new FileOutputStream("recv/" + new String(newFilename, 0, newFilename.length));
 					bufferedFileOutputStream = new BufferedOutputStream(fileOutputStream);
 
 					// If the packet is for transferring a chunk of the file
@@ -98,18 +110,44 @@ public class ServerCP1 {
 						clientSocket.close();
 					}
 
-
-				} else if (packetType == 2) { // for nonce
+				} else if (packetType == 2) { // for encrypting nonce
 					int numBytes = fromClient.readInt();
 					byte [] block = new byte[numBytes];
 					fromClient.readFully(block,0, numBytes);
 
 					byte[] encryptedBytes = RSAEnCipherPrivate.doFinal(block);
-					System.out.println("Encrypted Bytes: " + new String(encryptedBytes));
 
-					toClient.writeInt(encryptedBytes.length);
-					toClient.write(encryptedBytes);
-					toClient.flush();
+					InputStream inputStream = new ByteArrayInputStream(encryptedBytes);
+					BufferedInputStream bufferedInputStream = new BufferedInputStream(inputStream);
+					byte[] blockbyte = new byte[117];
+
+					for (boolean byteFinished = false; !byteFinished;) {
+						int numOfBytes = bufferedInputStream.read(blockbyte);
+						byteFinished = numOfBytes < 117;
+
+						toClient.writeInt(numOfBytes);
+						toClient.write(blockbyte);
+						toClient.flush();
+					}
+				}
+				else if (packetType == 4){ //send certificate to client
+					String certificate = "ServerCert.crt";
+					System.out.println("Sending certificate " + certificate + " to client");
+
+					FileInputStream fileInputStream = new FileInputStream(certificate);
+					BufferedInputStream bufferedFileInputStream = new BufferedInputStream(fileInputStream);
+
+					byte[] fromFileblock = new byte[117];
+
+					for (boolean fileEnded = false; !fileEnded;){
+						int numBytes = bufferedFileInputStream.read(fromFileblock);
+
+						fileEnded = numBytes<117;
+						toClient.writeInt(numBytes);
+						toClient.write(fromFileblock);
+						toClient.flush();
+					}
+					System.out.println("Sent certificate");
 				}
 			}
 		} catch (Exception e) {e.printStackTrace();}
