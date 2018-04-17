@@ -17,22 +17,6 @@ import java.util.Random;
 import java.util.concurrent.TimeUnit;
 
 public class ServerCP1 {
-	private static void sendBytes(DataOutputStream toClient, byte[] bytes) throws IOException {
-		InputStream is = new ByteArrayInputStream(bytes);
-		BufferedInputStream bis = new BufferedInputStream(is);
-		byte [] byteBuffer = new byte[117];
-		// Send bytes
-		for (boolean byteEnded = false; !byteEnded;) {
-			int numBytes = bis.read(byteBuffer);
-			System.out.println(numBytes);
-			byteEnded = numBytes < 117;
-
-			toClient.writeInt(numBytes);
-			toClient.write(byteBuffer);
-			toClient.flush();
-		}
-	}
-
 
 	public static void main(String[] args) {
 
