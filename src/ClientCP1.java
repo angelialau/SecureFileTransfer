@@ -47,8 +47,6 @@ public class ClientCP1 {
 			fromServer = new DataInputStream(clientSocket.getInputStream());
 
             System.out.println("I'm asking for bob's certificate...");
-            toServer.writeInt(4); // packet type for nonce
-
             File serverCert = new File(serverCertName); // file to store server's cert
 
             if(!serverCert.exists()){
@@ -60,6 +58,8 @@ public class ClientCP1 {
 
                 FileOutputStream fileOutputStream = new FileOutputStream(serverCert);
                 BufferedOutputStream bufferedFileOutputStream = new BufferedOutputStream(fileOutputStream);
+                toServer.writeInt(4); // packet type for nonce
+
 
                 System.out.println("Bob is sending his cert...");
                 int serverNumBytes = 0;
@@ -114,9 +114,9 @@ public class ClientCP1 {
 
                 byte[] bobBuffer = new byte[lengthOfBytes];
                 fromServer.readFully(bobBuffer, 0 , lengthOfBytes);
-                byte[] decryptedBobBuffer = dcipher.doFinal((bobBuffer)); // bad padding : decrypt error here
-                totalBuffer.add(decryptedBobBuffer);
-                totalBufferLength+= decryptedBobBuffer.length;
+                //byte[] decryptedBobBuffer = dcipher.doFinal((bobBuffer)); // bad padding : decrypt error here
+                totalBuffer.add(bobBuffer);
+                totalBufferLength+= bobBuffer.length;
 
             } fromServer.skipBytes(117-lengthOfBytes);
 
@@ -130,9 +130,10 @@ public class ClientCP1 {
             }
 
             // decrypt server message with server's public key
+            byte[] deNonce = dcipher.doFinal(finalBuffer);
 
-//            byte[] decryptedServerMessage = dcipher.doFinal(finalBuffer);
-            String serverMessage = new String(finalBuffer);
+//          byte[] decryptedServerMessage = dcipher.doFinal(finalBuffer);
+            String serverMessage = new String(deNonce);
 
             System.out.println("Original nonce: " + theStringToCheck);
             System.out.println("Server's version: " + serverMessage);
