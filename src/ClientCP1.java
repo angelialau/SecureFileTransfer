@@ -58,7 +58,7 @@ public class ClientCP1 {
 
                 FileOutputStream fileOutputStream = new FileOutputStream(serverCert);
                 BufferedOutputStream bufferedFileOutputStream = new BufferedOutputStream(fileOutputStream);
-                toServer.writeInt(4); // packet type for nonce
+                toServer.writeInt(4); // packet type for ca-signed cert
 
 
                 System.out.println("Bob is sending his cert...");
