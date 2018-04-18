@@ -20,5 +20,8 @@ Tham Yee Ting 1002516
 ### Source code
 The files can be located within the `/src` directory. 
 
+### Throughput plots
+Is in the file `throughputPlots.pdf`. We plotted the bytes/time for each test file for both CP1 and CP2. We see an exponential increase in throughput for CP2 (with symmetric key) as the file sizes increases. 
+
 ### Test files
 Our test files range from `rr0.txt` to `rr7.txt`, each twice as large as the preceeding one. `rr0.txt` begins from 1250 lines of text, while `rr7.txt` ends with 16000 lines. 

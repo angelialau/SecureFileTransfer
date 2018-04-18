@@ -16,7 +16,7 @@ public class ClientCP2 {
 
 	public static void main(String[] args) {
 
-    	String filename = "rrlong.txt";
+    	String filename = "rr0.txt";
         String serverCertName = "theCert.crt";
         int sum = 0;
 
@@ -46,30 +46,29 @@ public class ClientCP2 {
             if(!serverCert.exists()){
                 boolean createdFile = serverCert.createNewFile();
                 if(!createdFile){
-                    System.out.println("Failed to create new file");
-                    throw new IOException("Failed to create certificate");
+                    System.out.println("Failed to create file for certificate");
+                    throw new IOException("Failed to create file for certificate");
                 }
-
-                FileOutputStream fileOutputStream = new FileOutputStream(serverCert);
-                BufferedOutputStream bufferedFileOutputStream = new BufferedOutputStream(fileOutputStream);
-                toServer.writeInt(4); // packet type for nonce
-
-
-                System.out.println("Bob is sending his cert...");
-                int serverNumBytes = 0;
-                for (boolean finishedSending = false; !finishedSending;) {
-                    serverNumBytes = fromServer.readInt();
-                    finishedSending = serverNumBytes < 117;
-
-                    byte[] bobBuffer = new byte[serverNumBytes];
-                    fromServer.readFully(bobBuffer, 0 , serverNumBytes);
-                    bufferedFileOutputStream.write(bobBuffer, 0, serverNumBytes);
-
-                } fromServer.skipBytes(117-serverNumBytes);
-
-                System.out.println("Received bob's cert...");
-                bufferedFileOutputStream.close();
             }
+            FileOutputStream fileOutputStream = new FileOutputStream(serverCert);
+            BufferedOutputStream bufferedFileOutputStream = new BufferedOutputStream(fileOutputStream);
+            toServer.writeInt(4); // packet type for nonce
+
+
+            System.out.println("Bob is sending his cert...");
+            int serverNumBytes = 0;
+            for (boolean finishedSending = false; !finishedSending;) {
+                serverNumBytes = fromServer.readInt();
+                finishedSending = serverNumBytes < 117;
+
+                byte[] bobBuffer = new byte[serverNumBytes];
+                fromServer.readFully(bobBuffer, 0 , serverNumBytes);
+                bufferedFileOutputStream.write(bobBuffer, 0, serverNumBytes);
+
+            } fromServer.skipBytes(117-serverNumBytes);
+
+            System.out.println("Received bob's cert...");
+            bufferedFileOutputStream.close();
 
             Random random = new Random();
             theStringToCheck = String.valueOf(random.nextInt());
@@ -106,7 +105,6 @@ public class ClientCP2 {
             int lengthOfBytes = 0;
             for (boolean finishedSending = false; !finishedSending;) {
                 lengthOfBytes = fromServer.readInt();
-                System.out.println("num bytes: " + lengthOfBytes);
                 finishedSending = lengthOfBytes < 117;
 
                 byte[] bobBuffer = new byte[lengthOfBytes];
@@ -153,8 +151,6 @@ public class ClientCP2 {
             toServer.writeInt(encryptedKey.length);
             toServer.write(encryptedKey);
             toServer.flush();
-
-            System.out.println("shared key is: " + sharedKey.toString());
 
             // cipher for shared session key
             Cipher fasterCipher = Cipher.getInstance("AES/ECB/PKCS5Padding");
